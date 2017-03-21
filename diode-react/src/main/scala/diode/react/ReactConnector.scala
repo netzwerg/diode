@@ -116,7 +116,7 @@ trait ReactConnector[M <: AnyRef] { circuit: Circuit[M] =>
       }
 
       private def changeHandler(cursor: ModelRO[S]): Unit = {
-        val isMounted = t.isMounted
+        val isMounted = t.isMounted.map(_.getOrElse(false))
         val stateHasChanged = t.state.map(state => modelReader =!= state)
         (isMounted && stateHasChanged).map {
           case true => t.setState(modelReader()).runNow()
@@ -127,7 +127,7 @@ trait ReactConnector[M <: AnyRef] { circuit: Circuit[M] =>
       def render(s: S, compB: ModelProxy[S] => VdomElement) = wrap(modelReader)(compB)
     }
 
-    ScalaComponent.build[ModelProxy[S] => VdomElement]("DiodeWrapper")
+    ScalaComponent.builder[ModelProxy[S] => VdomElement]("DiodeWrapper")
       .initialState(modelReader())
       .renderBackend[Backend]
       .componentWillMount(_.backend.willMount)
