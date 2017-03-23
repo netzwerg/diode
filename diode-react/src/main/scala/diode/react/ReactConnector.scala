@@ -100,7 +100,7 @@ trait ReactConnector[M <: AnyRef] { circuit: Circuit[M] =>
   def connect[S <: AnyRef](modelReader: ModelRO[S], key: js.UndefOr[js.Any] = js.undefined)(
       implicit feq: FastEq[_ >: S]): ReactConnectProxy[S] = {
 
-    class Backend(t: BackendScope[ModelProxy[S] => VdomElement, S]) {
+    class Backend(t: BackendScope[ReactConnectProps[S], S]) {
       private var unsubscribe = Option.empty[() => Unit]
 
       def willMount = {
@@ -116,18 +116,19 @@ trait ReactConnector[M <: AnyRef] { circuit: Circuit[M] =>
       }
 
       private def changeHandler(cursor: ModelRO[S]): Unit = {
-        val isMounted = t.isMounted
+        val isMounted = t.isMounted.map(_.getOrElse(false))
         val stateHasChanged = t.state.map(state => modelReader =!= state)
-        (isMounted && stateHasChanged).map {
-          case true => t.setState(modelReader()).runNow()
-          case _ =>
-        }.runNow()
+
+        def updateState(shouldUpdate: Boolean): Callback =
+          Callback.when(shouldUpdate)(t.setState(modelReader()))
+
+        ((isMounted && stateHasChanged) >>= updateState).runNow()
       }
 
       def render(s: S, compB: ModelProxy[S] => VdomElement) = wrap(modelReader)(compB)
     }
 
-    ScalaComponent.build[ModelProxy[S] => VdomElement]("DiodeWrapper")
+    ScalaComponent.builder[ModelProxy[S] => VdomElement]("DiodeWrapper")
       .initialState(modelReader())
       .renderBackend[Backend]
       .componentWillMount(_.backend.willMount)
